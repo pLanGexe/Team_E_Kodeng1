@@ -17,13 +17,17 @@
 			"enableNonRootDocker": "true",
 			"moby": "true"
 		}
-	}
+	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "docker --version",
+	"postCreateCommand": "python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
+
+	// Use 'postStartCommand' to run commands after the container starts.
+	"postStartCommand": "echo 'source /workspaces/${localWorkspaceFolderBasename}/.venv/bin/activate' >> ~/.bashrc",
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+	"remoteUser": "vscode"
 }
