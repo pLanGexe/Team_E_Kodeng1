@@ -66,6 +66,24 @@ The container sets the following Python environment variables:
 
 ## 🔧 Development Workflow
 
+### Quick Setup Verification
+
+After opening the project in DevContainer, verify your setup with these one-liners:
+
+```bash
+# Test library installation
+python3 -c "import fastapi, streamlit, sqlalchemy; print('Libraries installed successfully!')"
+
+# Test database connection (ensure PostgreSQL container is running)
+python3 -c "
+import sys; sys.path.append('.')
+from backend.db import init_db, increment_and_get
+init_db()
+print('Database test - Counter value:', increment_and_get()[0])
+print('Database test - Counter value:', increment_and_get()[0])
+"
+```
+
 ### Working with Docker
 
 Since Docker-outside-of-Docker is enabled, you can run Docker commands directly inside the DevContainer:
@@ -86,10 +104,6 @@ docker ps
 The container comes with Python 3 pre-installed:
 
 ```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
 # Install dependencies
 pip install -r requirements.txt
 
