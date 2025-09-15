@@ -129,6 +129,26 @@ Available endpoints:
 - `GET /hello` - Simple hello world message
 - `GET /count` - Increment and return a counter value
 
+### Running the Streamlit Frontend
+
+To start the Streamlit frontend application:
+
+```bash
+# Run the Streamlit frontend
+streamlit run frontend/streamlit_app.py
+
+# The app will be available at:
+# - Local: http://localhost:8501
+# - Network: http://172.20.0.2:8501 (container IP)
+```
+
+The frontend provides:
+- A simple web interface to interact with the backend
+- Counter increment button that calls the `/count` API endpoint
+- Error handling for backend connectivity issues
+
+**Note:** Make sure the FastAPI backend is running on port 8000 before starting the frontend.
+
 ### Port Forwarding
 
 To expose application ports, uncomment and configure the `forwardPorts` setting in `.devcontainer/devcontainer.json`:
