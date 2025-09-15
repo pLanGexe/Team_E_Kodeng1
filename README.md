@@ -111,6 +111,24 @@ pip install -r requirements.txt
 python3 app.py
 ```
 
+### Running the FastAPI Backend
+
+To start the FastAPI backend server:
+
+```bash
+# Run the FastAPI backend with auto-reload
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+# The server will be available at:
+# - Local: http://localhost:8000
+# - API docs: http://localhost:8000/docs
+# - Alternative docs: http://localhost:8000/redoc
+```
+
+Available endpoints:
+- `GET /hello` - Simple hello world message
+- `GET /count` - Increment and return a counter value
+
 ### Port Forwarding
 
 To expose application ports, uncomment and configure the `forwardPorts` setting in `.devcontainer/devcontainer.json`:

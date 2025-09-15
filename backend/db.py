@@ -30,7 +30,11 @@ def increment_and_get(name="global"):
         conn.execute(text("""
             UPDATE counters SET value = value + 1 WHERE name = :name
         """), {"name": name})
-        row = conn.execute(text("""
-            SELECT value FROM counters WHERE name = :name
-        """), {"name": name}).one()
-        return row
+        value = conn.execute(
+            text("""
+                SELECT value FROM counters
+                WHERE name = :name
+            """),
+            {"name": name},
+        ).scalar_one()
+        return value
