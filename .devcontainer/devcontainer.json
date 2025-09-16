@@ -11,6 +11,12 @@
 		"LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}"
 	},
 
+	"customizations": {
+		"vscode": {
+			"extensions": ["ms-python.python", "ms-python.vscode-pylance"]
+		}
+	},
+
 	"features": {
 		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
 			"version": "latest",
