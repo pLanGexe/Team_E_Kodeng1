@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, Depends, HTTPException
 from typing import Optional, Annotated
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-import backend.db as db
 
 # ---------- Models ----------
 
@@ -41,7 +40,6 @@ SessionDep = Annotated[Session, Depends(get_session)]
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    db.init_db()
     create_db_and_tables()
     yield
 
