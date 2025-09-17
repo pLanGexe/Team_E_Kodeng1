@@ -6,3 +6,4 @@ alembic
 streamlit
 python-dotenv
 streamlit-autorefresh
+sqlmodel
