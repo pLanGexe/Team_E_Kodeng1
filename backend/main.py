@@ -1,73 +1,55 @@
-# app/backend/main.py
+# backend/main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query, Depends, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, Query
 from typing import Optional, Annotated
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 import sqlite3
 
-# ---------- Models ----------
+# ------------------ Models ------------------
 
-
-# Device Model
 class Device(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
+    name: str
     model: str
-    location: Optional[str] = Field(default=None, index=True)
+    location: Optional[str] = None
 
-# SensorData Model สำหรับเก็บข้อมูลจาก Wokwi
 class SensorData(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     device_id: Optional[int] = Field(default=None, foreign_key="device.id")
     timestamp: str
     value: float
 
-
-# ---------- Engine & DB setup ----------
+# ------------------ Database ------------------
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
-
-# For SQLite with FastAPI, allow cross-thread use within a request
 connect_args = {"check_same_thread": False}
-engine = create_engine(sqlite_url, connect_args=connect_args)  # set echo=True to log SQL
+engine = create_engine(sqlite_url, connect_args=connect_args)
 
-
-def create_db_and_tables() -> None:
+def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
-
-
-# ---------- Session dependency ----------
 
 def get_session():
     with Session(engine) as session:
         yield session
 
-
 SessionDep = Annotated[Session, Depends(get_session)]
 
+# ------------------ FastAPI app ------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     create_db_and_tables()
     yield
 
 app = FastAPI(lifespan=lifespan)
 
-# Example Endpoints
+# ------------------ Endpoints ------------------
+
 @app.get("/hello")
 def hello():
     return {"message": "Hello, World!"}
 
-# Simple counter endpoint
-@app.get("/count")
-def count():
-    value = db.increment_and_get("global")
-    return {"count": value}
-
-
-# Device Endpoints
 @app.post("/devices/", response_model=Device)
 def create_device(device: Device, session: SessionDep) -> Device:
     session.add(device)
@@ -76,47 +58,10 @@ def create_device(device: Device, session: SessionDep) -> Device:
     return device
 
 @app.get("/devices/", response_model=list[Device])
-def read_devices(
-    session: SessionDep,
-    offset: int = 0,
-    limit: Annotated[int, Query(le=100)] = 100,
-) -> list[Device]:
-    devices = session.exec(select(Device).offset(offset).limit(limit)).all()
-    return devices
+def read_devices(session: SessionDep, offset: int = 0, limit: Annotated[int, Query(le=100)] = 100):
+    return session.exec(select(Device).offset(offset).limit(limit)).all()
 
-@app.get("/devices/{device_id}", response_model=Device)
-def read_device(device_id: int, session: SessionDep) -> Device:
-    device = session.get(Device, device_id)
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
-    return device
-
-@app.delete("/devices/{device_id}")
-def delete_device(device_id: int, session: SessionDep):
-    device = session.get(Device, device_id)
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
-    session.delete(device)
-    session.commit()
-    return {"ok": True}
-
-# ---------- Sensor Data Endpoints ----------
-
-# รับข้อมูลจาก Wokwi (POST)
-@app.post("/data")
-def post_sensor_data(sensor: SensorData, session: SessionDep):
-    session.add(sensor)
-    session.commit()
-    session.refresh(sensor)
-    return sensor
-
-# ดึงข้อมูลล่าสุด (GET)
-@app.get("/data/latest", response_model=SensorData)
-def get_latest_sensor_data(session: SessionDep):
-    sensor = session.exec(select(SensorData).order_by(SensorData.timestamp.desc())).first()
-    if not sensor:
-        raise HTTPException(status_code=404, detail="No sensor data found")
-    return sensor
+# Sensor data endpoints
 
 @app.post("/sensor")
 async def receive_sensor(request: Request):
@@ -125,7 +70,9 @@ async def receive_sensor(request: Request):
     humidity = data.get("humidity")
     conn = sqlite3.connect("database.db")
     c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS sensor_data (id INTEGER PRIMARY KEY AUTOINCREMENT, temp REAL, humidity REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)")
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS sensor_data (id INTEGER PRIMARY KEY AUTOINCREMENT, temp REAL, humidity REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)"
+    )
     c.execute("INSERT INTO sensor_data (temp, humidity) VALUES (?, ?)", (temp, humidity))
     conn.commit()
     conn.close()
@@ -135,21 +82,12 @@ async def receive_sensor(request: Request):
 def get_latest_sensor():
     conn = sqlite3.connect("database.db")
     c = conn.cursor()
-    c.execute("SELECT temp, humidity, timestamp FROM sensor_data ORDER BY id DESC LIMIT 1")
+    c.execute(
+        "SELECT temp, humidity, timestamp FROM sensor_data ORDER BY id DESC LIMIT 1"
+    )
     row = c.fetchone()
     conn.close()
     if row:
         return {"temp": row[0], "humidity": row[1], "timestamp": row[2]}
     else:
         return {"temp": None, "humidity": None, "timestamp": None}
-
-import streamlit as st
-import requests
-
-st.header("Realtime Sensor Data")
-backend_url = "http://localhost:8000"  # หรือ URL backend จริง
-
-sensor = requests.get(f"{backend_url}/sensor/latest").json()
-st.metric("Temperature (°C)", sensor["temp"])
-st.metric("Humidity (%)", sensor["humidity"])
-st.caption(f"Timestamp: {sensor['timestamp']}")
