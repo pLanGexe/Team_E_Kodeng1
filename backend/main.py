@@ -1,8 +1,9 @@
 # app/backend/main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query, Depends, HTTPException
+from fastapi import FastAPI, Query, Depends, HTTPException, Request
 from typing import Optional, Annotated
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+import sqlite3
 
 # ---------- Models ----------
 
@@ -116,3 +117,39 @@ def get_latest_sensor_data(session: SessionDep):
     if not sensor:
         raise HTTPException(status_code=404, detail="No sensor data found")
     return sensor
+
+@app.post("/sensor")
+async def receive_sensor(request: Request):
+    data = await request.json()
+    temp = data.get("temp")
+    humidity = data.get("humidity")
+    conn = sqlite3.connect("database.db")
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS sensor_data (id INTEGER PRIMARY KEY AUTOINCREMENT, temp REAL, humidity REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)")
+    c.execute("INSERT INTO sensor_data (temp, humidity) VALUES (?, ?)", (temp, humidity))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+@app.get("/sensor/latest")
+def get_latest_sensor():
+    conn = sqlite3.connect("database.db")
+    c = conn.cursor()
+    c.execute("SELECT temp, humidity, timestamp FROM sensor_data ORDER BY id DESC LIMIT 1")
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return {"temp": row[0], "humidity": row[1], "timestamp": row[2]}
+    else:
+        return {"temp": None, "humidity": None, "timestamp": None}
+
+import streamlit as st
+import requests
+
+st.header("Realtime Sensor Data")
+backend_url = "http://localhost:8000"  # หรือ URL backend จริง
+
+sensor = requests.get(f"{backend_url}/sensor/latest").json()
+st.metric("Temperature (°C)", sensor["temp"])
+st.metric("Humidity (%)", sensor["humidity"])
+st.caption(f"Timestamp: {sensor['timestamp']}")
