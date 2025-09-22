@@ -1,49 +1,58 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
-import os
 import time
+from datetime import datetime
 
 # -------------------------------
 # Config
 # -------------------------------
-API_BASE = "https://refactored-disco-vrpv7g6gggrfx5jp-8000.app.github.dev/docs"   # URL ของ FastAPI backend
-DEVICE_ID = 1                        # สมมติอุปกรณ์ตัวแรก
-
-backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+API_BASE = os.getenv("BACKEND_URL", "http://localhost:8000")  # URL backend
 
 st.set_page_config(page_title="Smart System", layout="wide")
 st.title("🌱 Smart System Board")
 
-# ---------- Real-time Sensor Data Section ----------
-st.header("🌡️ Real-time Sensor Data")
+# -------------------------------
+# Real-time Sensor Data (Wokwi)
+# -------------------------------
+st.header("🌡️ Realtime Sensor Data (Temperature & Humidity)")
 
-def get_latest_sensor_data():
+# สร้าง placeholder และ DataFrame สำหรับกราฟย้อนหลัง
+temp_placeholder = st.empty()
+hum_placeholder = st.empty()
+chart_placeholder = st.empty()
+df_history = pd.DataFrame(columns=["timestamp", "temp", "humidity"])
+
+# ดึงข้อมูลล่าสุด
+def get_latest_sensor():
     try:
-        response = requests.get(f"{backend_url}/data/latest", timeout=2)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching sensor data: {str(e)}")
+        r = requests.get(f"{API_BASE}/sensor/latest", timeout=2)
+        r.raise_for_status()
+        return r.json()
+    except:
         return None
 
-sensor_placeholder = st.empty()
+# Loop Realtime (polling)
+for _ in range(1000):
+    sensor = get_latest_sensor()
+    if sensor and sensor["temp"] is not None:
+        timestamp = pd.to_datetime(sensor["timestamp"])
+        df_history = pd.concat([df_history, pd.DataFrame([{
+            "timestamp": timestamp,
+            "temp": sensor["temp"],
+            "humidity": sensor["humidity"]
+        }])]).tail(50)  # เก็บล่าสุด 50 records
 
-for _ in range(1000):  # Limit loop for safety
-    sensor = get_latest_sensor_data()
-    if sensor:
-        sensor_placeholder.markdown(f"""
-        **Timestamp:** {sensor['timestamp']}  
-        **Device ID:** {sensor.get('device_id', 'N/A')}  
-        **Value:** {sensor['value']}
-        """)
+        temp_placeholder.metric("Temperature (°C)", f"{sensor['temp']:.1f}")
+        hum_placeholder.metric("Humidity (%)", f"{sensor['humidity']:.1f}")
+
+        chart_placeholder.line_chart(df_history.set_index("timestamp")[["temp", "humidity"]])
     else:
-        sensor_placeholder.info("No sensor data available.")
+        st.warning("No sensor data available.")
     time.sleep(2)
 
 # -------------------------------
-# Helper function
+# Helper functions for existing devices/soil/water/alerts
 # -------------------------------
 def fetch_devices():
     r = requests.get(f"{API_BASE}/devices/")
@@ -52,10 +61,8 @@ def fetch_devices():
     return []
 
 def fetch_readings(device_id, sensor_type, hours=12):
-    """ดึง readings ล่าสุด n ชั่วโมง"""
-    start = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
-    params = {"start": start}
-    r = requests.get(f"{API_BASE}/devices/{device_id}/readings", params=params)
+    start = (datetime.utcnow() - pd.Timedelta(hours=hours)).isoformat()
+    r = requests.get(f"{API_BASE}/devices/{device_id}/readings", params={"start": start})
     if r.ok:
         df = pd.DataFrame(r.json())
         if not df.empty:
@@ -71,8 +78,7 @@ def fetch_alerts():
     return pd.DataFrame()
 
 def send_pump_command(device_id, command):
-    payload = {"command": command}
-    r = requests.post(f"{API_BASE}/devices/{device_id}/commands", json=payload)
+    r = requests.post(f"{API_BASE}/devices/{device_id}/commands", json={"command": command})
     return r.ok
 
 # -------------------------------
