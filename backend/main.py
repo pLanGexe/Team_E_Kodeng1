@@ -1,16 +1,26 @@
 # app/backend/main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query, Depends, HTTPException
+from fastapi import FastAPI, Query, Depends, HTTPException, Request
 from typing import Optional, Annotated
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+import sqlite3
 
 # ---------- Models ----------
 
+
+# Device Model
 class Device(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     model: str
     location: Optional[str] = Field(default=None, index=True)
+
+# SensorData Model สำหรับเก็บข้อมูลจาก Wokwi
+class SensorData(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    device_id: Optional[int] = Field(default=None, foreign_key="device.id")
+    timestamp: str
+    value: float
 
 
 # ---------- Engine & DB setup ----------
@@ -56,9 +66,8 @@ def count():
     value = db.increment_and_get("global")
     return {"count": value}
 
-# Example Device Endpoints using SQLModel
 
-# Create a new device
+# Device Endpoints
 @app.post("/devices/", response_model=Device)
 def create_device(device: Device, session: SessionDep) -> Device:
     session.add(device)
@@ -66,7 +75,6 @@ def create_device(device: Device, session: SessionDep) -> Device:
     session.refresh(device)
     return device
 
-# Read devices with pagination
 @app.get("/devices/", response_model=list[Device])
 def read_devices(
     session: SessionDep,
@@ -76,7 +84,6 @@ def read_devices(
     devices = session.exec(select(Device).offset(offset).limit(limit)).all()
     return devices
 
-# Read a specific device by ID
 @app.get("/devices/{device_id}", response_model=Device)
 def read_device(device_id: int, session: SessionDep) -> Device:
     device = session.get(Device, device_id)
@@ -84,7 +91,6 @@ def read_device(device_id: int, session: SessionDep) -> Device:
         raise HTTPException(status_code=404, detail="Device not found")
     return device
 
-# Delete a device
 @app.delete("/devices/{device_id}")
 def delete_device(device_id: int, session: SessionDep):
     device = session.get(Device, device_id)
@@ -93,3 +99,57 @@ def delete_device(device_id: int, session: SessionDep):
     session.delete(device)
     session.commit()
     return {"ok": True}
+
+# ---------- Sensor Data Endpoints ----------
+
+# รับข้อมูลจาก Wokwi (POST)
+@app.post("/data")
+def post_sensor_data(sensor: SensorData, session: SessionDep):
+    session.add(sensor)
+    session.commit()
+    session.refresh(sensor)
+    return sensor
+
+# ดึงข้อมูลล่าสุด (GET)
+@app.get("/data/latest", response_model=SensorData)
+def get_latest_sensor_data(session: SessionDep):
+    sensor = session.exec(select(SensorData).order_by(SensorData.timestamp.desc())).first()
+    if not sensor:
+        raise HTTPException(status_code=404, detail="No sensor data found")
+    return sensor
+
+@app.post("/sensor")
+async def receive_sensor(request: Request):
+    data = await request.json()
+    temp = data.get("temp")
+    humidity = data.get("humidity")
+    conn = sqlite3.connect("database.db")
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS sensor_data (id INTEGER PRIMARY KEY AUTOINCREMENT, temp REAL, humidity REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)")
+    c.execute("INSERT INTO sensor_data (temp, humidity) VALUES (?, ?)", (temp, humidity))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+@app.get("/sensor/latest")
+def get_latest_sensor():
+    conn = sqlite3.connect("database.db")
+    c = conn.cursor()
+    c.execute("SELECT temp, humidity, timestamp FROM sensor_data ORDER BY id DESC LIMIT 1")
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return {"temp": row[0], "humidity": row[1], "timestamp": row[2]}
+    else:
+        return {"temp": None, "humidity": None, "timestamp": None}
+
+import streamlit as st
+import requests
+
+st.header("Realtime Sensor Data")
+backend_url = "http://localhost:8000"  # หรือ URL backend จริง
+
+sensor = requests.get(f"{backend_url}/sensor/latest").json()
+st.metric("Temperature (°C)", sensor["temp"])
+st.metric("Humidity (%)", sensor["humidity"])
+st.caption(f"Timestamp: {sensor['timestamp']}")
