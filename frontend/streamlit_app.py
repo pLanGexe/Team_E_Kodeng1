@@ -4,8 +4,36 @@ import streamlit as st
 import pandas as pd
 from typing import List, Dict, Any
 
+
 st.set_page_config(page_title="Device Management", page_icon="📱", layout="wide")
 st.title("📱 Device Management System")
+
+# ---------- Real-time Sensor Data Section ----------
+st.header("🌡️ Real-time Sensor Data")
+
+def get_latest_sensor_data():
+    try:
+        response = requests.get(f"{backend_url}/data/latest", timeout=2)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error fetching sensor data: {str(e)}")
+        return None
+
+sensor_placeholder = st.empty()
+
+import time
+for _ in range(1000):  # Limit loop for safety
+    sensor = get_latest_sensor_data()
+    if sensor:
+        sensor_placeholder.markdown(f"""
+        **Timestamp:** {sensor['timestamp']}  
+        **Device ID:** {sensor.get('device_id', 'N/A')}  
+        **Value:** {sensor['value']}
+        """)
+    else:
+        sensor_placeholder.info("No sensor data available.")
+    time.sleep(2)
 
 backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
 

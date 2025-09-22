@@ -6,11 +6,20 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 # ---------- Models ----------
 
+
+# Device Model
 class Device(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     model: str
     location: Optional[str] = Field(default=None, index=True)
+
+# SensorData Model สำหรับเก็บข้อมูลจาก Wokwi
+class SensorData(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    device_id: Optional[int] = Field(default=None, foreign_key="device.id")
+    timestamp: str
+    value: float
 
 
 # ---------- Engine & DB setup ----------
@@ -56,9 +65,8 @@ def count():
     value = db.increment_and_get("global")
     return {"count": value}
 
-# Example Device Endpoints using SQLModel
 
-# Create a new device
+# Device Endpoints
 @app.post("/devices/", response_model=Device)
 def create_device(device: Device, session: SessionDep) -> Device:
     session.add(device)
@@ -66,7 +74,6 @@ def create_device(device: Device, session: SessionDep) -> Device:
     session.refresh(device)
     return device
 
-# Read devices with pagination
 @app.get("/devices/", response_model=list[Device])
 def read_devices(
     session: SessionDep,
@@ -76,7 +83,6 @@ def read_devices(
     devices = session.exec(select(Device).offset(offset).limit(limit)).all()
     return devices
 
-# Read a specific device by ID
 @app.get("/devices/{device_id}", response_model=Device)
 def read_device(device_id: int, session: SessionDep) -> Device:
     device = session.get(Device, device_id)
@@ -84,7 +90,6 @@ def read_device(device_id: int, session: SessionDep) -> Device:
         raise HTTPException(status_code=404, detail="Device not found")
     return device
 
-# Delete a device
 @app.delete("/devices/{device_id}")
 def delete_device(device_id: int, session: SessionDep):
     device = session.get(Device, device_id)
@@ -93,3 +98,21 @@ def delete_device(device_id: int, session: SessionDep):
     session.delete(device)
     session.commit()
     return {"ok": True}
+
+# ---------- Sensor Data Endpoints ----------
+
+# รับข้อมูลจาก Wokwi (POST)
+@app.post("/data")
+def post_sensor_data(sensor: SensorData, session: SessionDep):
+    session.add(sensor)
+    session.commit()
+    session.refresh(sensor)
+    return sensor
+
+# ดึงข้อมูลล่าสุด (GET)
+@app.get("/data/latest", response_model=SensorData)
+def get_latest_sensor_data(session: SessionDep):
+    sensor = session.exec(select(SensorData).order_by(SensorData.timestamp.desc())).first()
+    if not sensor:
+        raise HTTPException(status_code=404, detail="No sensor data found")
+    return sensor
