@@ -10,7 +10,32 @@ API_BASE = "http://localhost:8000"   # URL ของ FastAPI backend
 DEVICE_ID = 1                        # สมมติอุปกรณ์ตัวแรก
 
 st.set_page_config(page_title="Smart Irrigation Dashboard", layout="wide")
+
 st.title("🌱 Smart Irrigation System Dashboard")
+
+# -------------------------------
+# Real-time Sensor Data Section
+# -------------------------------
+st.header("🌡️ Real-time Sensor Data (Temp & Humidity)")
+import time
+sensor_placeholder = st.empty()
+def fetch_latest_sensor():
+    try:
+        r = requests.get(f"{API_BASE}/sensor/latest", timeout=2)
+        if r.ok:
+            return r.json()
+    except Exception as e:
+        st.error(f"Error: {e}")
+    return None
+
+for _ in range(1):  # ปรับเป็น loop หรือ st.button/refresh ได้
+    sensor = fetch_latest_sensor()
+    if sensor and sensor['temp'] is not None:
+        sensor_placeholder.metric("Temperature (°C)", f"{sensor['temp']:.1f}")
+        sensor_placeholder.metric("Humidity (%)", f"{sensor['humidity']:.1f}")
+        st.caption(f"Timestamp: {sensor['timestamp']}")
+    else:
+        sensor_placeholder.info("No sensor data available.")
 
 # -------------------------------
 # Helper function
