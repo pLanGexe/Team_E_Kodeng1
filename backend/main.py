@@ -1,12 +1,12 @@
 from fastapi import FastAPI, Depends
-from sqlalchemy import create_engine, Column, Integer, Float, String
+from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
 from datetime import datetime
 
 # ----------------- DATABASE -----------------
-DATABASE_URL = "http://localhost:8000"
+DATABASE_URL = "sqlite:///./sensor.db"  # ✅ แก้เป็น SQLite
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -21,7 +21,7 @@ class SensorData(Base):
     humidity = Column(Float, nullable=True)
     soil_moisture = Column(Float, nullable=True)
     water_level = Column(Float, nullable=True)
-    timestamp = Column(String, default=datetime.utcnow().isoformat)
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
@@ -31,12 +31,11 @@ class SensorDataCreate(BaseModel):
     humidity: float | None = None
     soil_moisture: float | None = None
     water_level: float | None = None
-    timestamp: str | None = None
+    timestamp: datetime | None = None
 
 # ----------------- APP -----------------
 app = FastAPI()
 
-# Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -52,7 +51,7 @@ def create_sensor_data(data: SensorDataCreate, db: Session = Depends(get_db)):
         humidity=data.humidity,
         soil_moisture=data.soil_moisture,
         water_level=data.water_level,
-        timestamp=data.timestamp or datetime.utcnow().isoformat(),
+        timestamp=data.timestamp or datetime.utcnow(),
     )
     db.add(sensor_entry)
     db.commit()
