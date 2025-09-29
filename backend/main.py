@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 # ----------------- DATABASE -----------------
-DATABASE_URL = "sqlite:///./iot_data.db"
+DATABASE_URL = "http://localhost:8000"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
