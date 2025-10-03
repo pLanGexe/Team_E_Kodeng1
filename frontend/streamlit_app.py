@@ -1,67 +1,46 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
+import time
 
-API_BASE = "http://localhost:8000"
+API_URL = "https://psychic-couscous-7644xg6rvpp2p4wg-8001.app.github.dev/sensor/all"
 
-st.set_page_config(page_title="Smart Irrigation", layout="wide")
-st.title("🌱 Smart Irrigation Dashboard")
+st.set_page_config(page_title="Sensor Monitor", layout="wide")
+st.title("🌡️ Sensor Dashboard")
+st.write("ดึงข้อมูลจาก FastAPI และแสดงผลแบบเรียลไทม์")
 
-# --- Latest Sensor Data ---
-st.header("🌡️ Temperature & Humidity")
-sensor_placeholder = st.empty()
+# Containers สำหรับอัปเดตตารางและค่าล่าสุด
+table_container = st.empty()
+temp_container = st.empty()
+hum_container = st.empty()
 
-def fetch_latest():
+REFRESH_INTERVAL = 2  # วินาที
+
+while True:
     try:
-        r = requests.get(f"{API_BASE}/sensor/latest")
-        if r.ok:
-            return r.json()
-    except:
-        return None
+        response = requests.get(API_URL, timeout=5)
+        data = response.json()
+    except Exception as e:
+        st.error(f"API Error: {e}")
+        data = None
 
-sensor = fetch_latest()
-if sensor:
-    st.metric("Temperature (°C)", sensor["temperature"])
-    st.metric("Humidity (%)", sensor["humidity"])
-    st.caption(f"Timestamp: {sensor['timestamp']}")
-else:
-    st.info("No sensor data yet.")
+    if data and data.get("status") == "ok":
+        sensor_list = data["data"]
 
-# --- Soil Moisture Chart ---
-st.subheader("🌾 Soil Moisture")
-r = requests.get(f"{API_BASE}/sensor")
-if r.ok:
-    df = pd.DataFrame(r.json())
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-    if not df.empty:
-        st.line_chart(df.set_index("timestamp")["soil_moisture"])
-        st.metric("Latest Soil Moisture (%)", f"{df.iloc[-1]['soil_moisture']:.1f}")
+        if len(sensor_list) > 0:
+            # แปลงเป็น DataFrame
+            df = pd.DataFrame(sensor_list)
+            df["Time"] = pd.to_datetime(df["Time"], unit="s")
 
-# --- Water Level Chart ---
-st.subheader("💧 Water Level")
-if not df.empty:
-    st.line_chart(df.set_index("timestamp")["water_level"])
-    st.metric("Latest Water Level (%)", f"{df.iloc[-1]['water_level']:.1f}")
+            # --- แสดงตารางทั้งหมด ---
+            table_container.dataframe(df)
 
-# --- Pump Control ---
-st.subheader("🚰 Pump Control")
-devices = requests.get(f"{API_BASE}/devices/").json()
-DEVICE_ID = devices[0]["id"]
+            # --- แสดงค่าล่าสุด (row แรก) ---
+            latest = sensor_list[0]
+            temp_container.metric("Temperature (°C)", f"{latest['temperature']} °C")
+            hum_container.metric("Humidity (%)", f"{latest['humidity']} %")
+    else:
+        st.warning("ยังไม่มีข้อมูลใน Database")
 
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("Turn Pump ON"):
-        res = requests.post(f"{API_BASE}/devices/{DEVICE_ID}/commands", json={"command":"ON"})
-        if res.ok:
-            st.success("Pump ON")
-with col2:
-    if st.button("Turn Pump OFF"):
-        res = requests.post(f"{API_BASE}/devices/{DEVICE_ID}/commands", json={"command":"OFF"})
-        if res.ok:
-            st.success("Pump OFF")
-
-# --- Alerts ---
-st.subheader("⚠️ Alerts")
-alerts = requests.get(f"{API_BASE}/alerts/").json()
-st.dataframe(alerts)
+    time.sleep(REFRESH_INTERVAL)
