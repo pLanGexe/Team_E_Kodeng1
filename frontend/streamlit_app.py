@@ -24,7 +24,10 @@ bangkok_tz = pytz.timezone("Asia/Bangkok")
 while True:
     # --- เวลา ณ ขณะนี้ (กรุงเทพ) ---
     now = datetime.now(bangkok_tz).strftime("%Y-%m-%d %H:%M:%S")
-    time_container.markdown(f"🕒 <div style='text-align:right; font-size:20px;'>เวลาปัจจุบัน (กรุงเทพ): {now}</div>", unsafe_allow_html=True)
+    time_container.markdown(
+        f"🕒 <div style='text-align:right; font-size:20px;'>เวลาปัจจุบัน (กรุงเทพ): {now}</div>",
+        unsafe_allow_html=True
+    )
 
     try:
         response = requests.get(API_URL, timeout=5)
@@ -44,22 +47,29 @@ while True:
             # --- แสดงตารางทั้งหมด ---
             table_container.dataframe(df)
 
-            # --- คำนวณค่าเฉลี่ย ---
+            # --- คำนวณค่าเฉลี่ย / ต่ำสุด / สูงสุด ---
             avg_temp = df["temperature"].mean()
             avg_hum = df["humidity"].mean()
+            min_temp = df["temperature"].min()
+            max_temp = df["temperature"].max()
+            min_hum = df["humidity"].min()
+            max_hum = df["humidity"].max()
 
             # --- ค่าล่าสุด ---
             latest = sensor_list[0]
 
             # --- แสดงผลแบบแถวเดียวกัน ---
             with metrics_container.container():
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5, col6 = st.columns(6)
                 col1.metric("🌡️ Temperature (°C)", f"{latest['temperature']:.2f} °C")
                 col2.metric("💧 Humidity (%)", f"{latest['humidity']:.2f} %")
                 col3.metric("🌡️ Avg Temp (°C)", f"{avg_temp:.2f} °C")
                 col4.metric("💧 Avg Humidity (%)", f"{avg_hum:.2f} %")
+                col5.metric("🌡️ Min/Max Temp", f"{min_temp:.2f} / {max_temp:.2f}")
+                col6.metric("💧 Min/Max Hum", f"{min_hum:.2f} / {max_hum:.2f}")
 
     else:
         st.warning("ยังไม่มีข้อมูลใน Database")
 
     time.sleep(REFRESH_INTERVAL)
+
