@@ -30,7 +30,7 @@ while True:
     )
 
     try:
-        response = requests.get(API_URL, timeout=15)
+        response = requests.get(API_URL, timeout=30)
         data = response.json()
     except Exception as e:
         st.error(f"API Error: {e}")
