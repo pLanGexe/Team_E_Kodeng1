@@ -30,7 +30,7 @@ while True:
     )
 
     try:
-        response = requests.get(API_URL, timeout=5)
+        response = requests.get(API_URL, timeout=15)
         data = response.json()
     except Exception as e:
         st.error(f"API Error: {e}")
@@ -44,16 +44,19 @@ while True:
             df = pd.DataFrame(sensor_list)
             df["Time"] = pd.to_datetime(df["Time"], unit="s")
 
+            # ✅ แก้ชื่อคอลัมน์ให้ตัวอักษรแรกเป็นพิมพ์ใหญ่
+            df.columns = [col.capitalize() for col in df.columns]
+
             # --- แสดงตารางทั้งหมด ---
             table_container.dataframe(df)
 
             # --- คำนวณค่าเฉลี่ย / ต่ำสุด / สูงสุด ---
-            avg_temp = df["temperature"].mean()
-            avg_hum = df["humidity"].mean()
-            min_temp = df["temperature"].min()
-            max_temp = df["temperature"].max()
-            min_hum = df["humidity"].min()
-            max_hum = df["humidity"].max()
+            avg_temp = df["Temperature"].mean()
+            avg_hum = df["Humidity"].mean()
+            min_temp = df["Temperature"].min()
+            max_temp = df["Temperature"].max()
+            min_hum = df["Humidity"].min()
+            max_hum = df["Humidity"].max()
 
             # --- ค่าล่าสุด ---
             latest = sensor_list[0]
@@ -72,4 +75,3 @@ while True:
         st.warning("ยังไม่มีข้อมูลใน Database")
 
     time.sleep(REFRESH_INTERVAL)
-

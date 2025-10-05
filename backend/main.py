@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
@@ -11,6 +12,15 @@ DB_FILE = os.path.join(BASE_DIR, "sensor.db")
 
 app = FastAPI()
 
+# ✅ เพิ่ม CORS Middleware เพื่อให้ Streamlit เรียก API ได้จากภายนอก
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # อนุญาตทุกโดเมน (หรือระบุ Streamlit URL ก็ได้)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 latest_data = {}
 
 # -----------------------------
@@ -19,7 +29,8 @@ latest_data = {}
 class SensorData(BaseModel):
     temp: float
     humidity: float
-    timestamp: Optional[int] = None  # <- แก้จาก str → int
+    timestamp: Optional[int] = None  # timestamp จาก ESP32 (หน่วย: วินาที)
+
 
 # -----------------------------
 # รับข้อมูลล่าสุดจาก ESP32
@@ -28,33 +39,34 @@ class SensorData(BaseModel):
 async def post_sensor(data: SensorData):
     global latest_data
 
-    # ถ้า ESP32 ส่ง timestamp มาจะใช้เลย (UTC+7)
     if data.timestamp:
-        ts = datetime.fromtimestamp(data.timestamp)
+        # ✅ ใช้ timestamp ที่ส่งมาจาก ESP32 (ไม่เปลี่ยน)
+        ts_raw = datetime.fromtimestamp(data.timestamp)
+        # ✅ แต่บันทึกใน DB เป็นเวลาไทย (+7 ชั่วโมง)
+        ts_th = ts_raw + timedelta(hours=7)
     else:
-        # ถ้าไม่ส่ง timestamp มา ใช้เวลาปัจจุบันของไทย
-        ts = datetime.utcnow() + timedelta(hours=7)
+        # ถ้า ESP32 ไม่ส่งมา ใช้เวลาปัจจุบันของไทย
+        ts_raw = datetime.utcnow()
+        ts_th = ts_raw + timedelta(hours=7)
 
     latest_data = {
         "temp": data.temp,
         "humidity": data.humidity,
-        "timestamp": ts.isoformat()
+        "timestamp": ts_raw.isoformat()  # ใช้เวลาที่ส่งมาจาก ESP32
     }
 
-    # --- LOG ใน terminal ---
-    print(f"[{ts}] Temp: {data.temp:.2f} °C | Humidity: {data.humidity:.2f} %")
+    print(f"[{ts_raw}] Temp: {data.temp:.2f} °C | Humidity: {data.humidity:.2f} %")
 
-    # --- INSERT ลง SQLite ---
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO data (humidity, temperature, Time) VALUES (?, ?, ?)",
-            (float(data.humidity), float(data.temp), int(ts.timestamp()))
+            (float(data.humidity), float(data.temp), int(ts_th.timestamp()))
         )
         conn.commit()
         conn.close()
-        print(f"Inserted into DB at Time={int(ts.timestamp())}")
+        print(f"Inserted into DB (Thai Time={ts_th})")
     except sqlite3.IntegrityError as e:
         print(f"DB Error: {e}")
 
@@ -80,10 +92,8 @@ async def get_all_sensors():
         data_list = []
         for row in rows:
             row_dict = dict(row)
-            # แปลง timestamp เป็นเวลาประเทศไทย (UTC+7)
-            row_dict["timestamp"] = (
-                datetime.fromtimestamp(row_dict["Time"]) + timedelta(hours=7)
-            ).isoformat()
+            # DB เก็บเป็นเวลาไทยแล้ว
+            row_dict["timestamp"] = datetime.fromtimestamp(row_dict["Time"]).isoformat()
             data_list.append(row_dict)
 
         return {"status": "ok", "data": data_list}
